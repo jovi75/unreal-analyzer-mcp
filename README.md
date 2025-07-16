@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/ayeletstudioindia-unreal-analyzer-mcp-badge.png)](https://mseep.ai/app/ayeletstudioindia-unreal-analyzer-mcp)
+
 <!--
 Created by Ayelet Technology Private Limited
 -->
