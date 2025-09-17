@@ -1,8 +1,26 @@
 declare module 'tree-sitter' {
+  export interface Query {
+    matches(node: SyntaxNode): QueryMatch[];
+  }
+
+  export interface QueryMatch {
+    pattern: number;
+    captures: QueryCapture[];
+  }
+
+  export interface QueryCapture {
+    name: string;
+    node: SyntaxNode;
+  }
+
+  export interface Language {
+    query(source: string): Query;
+  }
+
   export class Parser {
-    setLanguage(language: any): void;
+    setLanguage(language: Language): void;
     parse(input: string): Tree;
-    createQuery(source: string): Query;
+    getLanguage(): Language;
   }
 
   export interface Tree {
@@ -17,29 +35,16 @@ declare module 'tree-sitter' {
     children: SyntaxNode[];
     parent: SyntaxNode | null;
     descendantsOfType(type: string): SyntaxNode[];
+    hasError: boolean;
   }
 
   export interface Position {
     row: number;
     column: number;
   }
-
-  export interface Query {
-    matches(node: SyntaxNode): QueryMatch[];
-  }
-
-  export interface QueryMatch {
-    pattern: number;
-    captures: QueryCapture[];
-  }
-
-  export interface QueryCapture {
-    name: string;
-    node: SyntaxNode;
-  }
 }
 
 declare module 'tree-sitter-cpp' {
-  const language: any;
+  const language: import('tree-sitter').Language;
   export = language;
 }

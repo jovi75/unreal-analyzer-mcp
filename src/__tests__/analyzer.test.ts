@@ -20,9 +20,7 @@ jest.mock('tree-sitter', () => {
   return jest.fn(() => mockTreeSitter);
 });
 
-jest.mock('tree-sitter-cpp', () => {
-  return jest.fn(() => mockCppBindings);
-});
+jest.mock('tree-sitter-cpp', () => mockCppBindings);
 
 jest.mock('tree-sitter-cpp/bindings/node', () => mockCppBindings);
 

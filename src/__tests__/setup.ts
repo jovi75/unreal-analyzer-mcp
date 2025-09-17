@@ -10,15 +10,12 @@ export const mockTreeSitter = {
   setLanguage: jest.fn(),
   parse: jest.fn().mockReturnValue({
     rootNode: {
-      hasError: jest.fn().mockReturnValue(false),
+      hasError: false,
       descendantsOfType: jest.fn().mockReturnValue([]),
       children: [],
       startPosition: { row: 0, column: 0 },
       text: ''
     }
-  }),
-  createQuery: jest.fn().mockReturnValue({
-    matches: jest.fn().mockReturnValue([])
   })
 };
 
@@ -28,7 +25,10 @@ export const mockCppBindings = {
     typeIdentifier: 1,
     functionDefinition: 2,
     classSpecifier: 3,
-  }
+  },
+  query: jest.fn().mockReturnValue({
+    matches: jest.fn().mockReturnValue([])
+  })
 };
 
 export const mockGlob = {

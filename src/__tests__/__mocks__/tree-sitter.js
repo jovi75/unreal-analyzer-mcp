@@ -4,7 +4,7 @@ const mockParser = {
   setLanguage: jest.fn(),
   parse: jest.fn().mockReturnValue({
     rootNode: {
-      hasError: jest.fn().mockReturnValue(false),
+      hasError: false,
       descendantsOfType: jest.fn().mockReturnValue([]),
       children: [],
       startPosition: { row: 0, column: 0 },

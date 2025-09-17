@@ -2,7 +2,7 @@
  * Created by Ayelet Technology Private Limited
  */
 
-import Parser, { Query, QueryCapture, SyntaxNode } from 'tree-sitter';
+import Parser, { Query, QueryCapture, SyntaxNode, Language } from 'tree-sitter';
 import * as CPP from 'tree-sitter-cpp';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -118,12 +118,9 @@ interface CodePatternMatch {
   learningResources: LearningResource[];
 }
 
-type ExtendedParser = Parser & {
-  createQuery(pattern: string): Query;
-};
-
 export class UnrealCodeAnalyzer {
-  private parser: ExtendedParser;
+  private parser: Parser;
+  private language: Language;
   private unrealPath: string | null = null;
   private customPath: string | null = null;
   private classCache: Map<string, ClassInfo> = new Map();
@@ -142,16 +139,39 @@ export class UnrealCodeAnalyzer {
   };
 
   constructor() {
-    this.parser = new Parser() as ExtendedParser;
-    this.parser.setLanguage(CPP);
-    
+    this.parser = new Parser();
+    this.language = CPP as Language;
+    this.parser.setLanguage(this.language);
+
     // Pre-cache common queries
     Object.entries(this.QUERY_PATTERNS).forEach(([key, pattern]) => {
-      const query = this.parser.createQuery(pattern);
-      if (query) {
-        this.queryCache.set(key, query);
-      }
+      const query = this.createQuery(pattern);
+      this.queryCache.set(key, query);
     });
+  }
+
+  private createQuery(pattern: string): Query {
+    const language = this.language;
+
+    if (language && typeof (language as any).query === 'function') {
+      return (language as any).query(pattern);
+    }
+
+    const QueryCtor = (Parser as any).Query;
+    if (typeof QueryCtor === 'function') {
+      return new QueryCtor(language, pattern);
+    }
+
+    throw new Error('Tree-sitter query API is not available');
+  }
+
+  private getOrCreateQuery(key: string, pattern: string): Query {
+    let query = this.queryCache.get(key);
+    if (!query) {
+      query = this.createQuery(pattern);
+      this.queryCache.set(key, query);
+    }
+    return query;
   }
 
   private manageCache<T extends object>(cache: Map<string, T>, key: string, value: T): void {
@@ -223,16 +243,12 @@ export class UnrealCodeAnalyzer {
     const content = fs.readFileSync(filePath, 'utf8');
     let tree = this.astCache.get(filePath);
     
-    if (!tree || tree.rootNode.hasError()) {
+    if (!tree || tree.rootNode.hasError) {
       tree = this.parser.parse(content);
       this.manageCache(this.astCache, filePath, tree);
     }
 
-    let classQuery = this.queryCache.get('CLASS');
-    if (!classQuery) {
-      classQuery = this.parser.createQuery(this.QUERY_PATTERNS.CLASS);
-      this.queryCache.set('CLASS', classQuery);
-    }
+    const classQuery = this.getOrCreateQuery('CLASS', this.QUERY_PATTERNS.CLASS);
 
     const matches = classQuery.matches(tree.rootNode);
     for (const match of matches) {
@@ -464,12 +480,7 @@ export class UnrealCodeAnalyzer {
             : `(identifier) @id (#eq? @id "${identifier}")`;
           
           const cacheKey = `${type}-${identifier}`;
-          let query = this.queryCache.get(cacheKey);
-          
-          if (!query) {
-            query = this.parser.createQuery(queryString);
-            this.queryCache.set(cacheKey, query);
-          }
+          const query = this.getOrCreateQuery(cacheKey, queryString);
 
           if (!query || !tree) {
             return [];
