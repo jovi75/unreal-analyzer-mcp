@@ -3,17 +3,26 @@
  * Created by Ayelet Technology Private Limited
  */
 
-import { Server, StdioServerTransport } from '@modelcontextprotocol/create-server';
-import type { CallToolRequest, ListToolsRequest } from '@modelcontextprotocol/create-server';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolRequest, ListToolsRequest } from '@modelcontextprotocol/sdk/types.js';
+import { fileURLToPath } from 'node:url';
 import { UnrealCodeAnalyzer } from './analyzer.js';
 import { GAME_GENRES, GameGenre, GenreFlag } from './types/game-genres.js';
 
-class UnrealAnalyzerServer {
+interface UnrealAnalyzerServerOptions {
+  server?: Server;
+  analyzer?: UnrealCodeAnalyzer;
+  registerProcessHandlers?: boolean;
+}
+
+export class UnrealAnalyzerServer {
   private server: Server;
   private analyzer: UnrealCodeAnalyzer;
 
-  constructor() {
-    this.server = new Server(
+  constructor(options: UnrealAnalyzerServerOptions = {}) {
+    this.server = options.server ?? new Server(
       {
         name: 'unreal-analyzer',
         version: '0.1.0',
@@ -25,18 +34,20 @@ class UnrealAnalyzerServer {
       }
     );
 
-    this.analyzer = new UnrealCodeAnalyzer();
+    this.analyzer = options.analyzer ?? new UnrealCodeAnalyzer();
     this.setupToolHandlers();
     
     this.server.onerror = (error: Error) => console.error('[MCP Error]', error);
-    process.on('SIGINT', async () => {
-      await this.server.close();
-      process.exit(0);
-    });
+    if (options.registerProcessHandlers !== false) {
+      process.on('SIGINT', async () => {
+        await this.server.close();
+        process.exit(0);
+      });
+    }
   }
 
   private setupToolHandlers() {
-    this.server.setRequestHandler<ListToolsRequest>('list_tools', async () => ({
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
           name: 'set_unreal_path',
@@ -231,7 +242,7 @@ class UnrealAnalyzerServer {
       ],
     }));
 
-    this.server.setRequestHandler<CallToolRequest>('call_tool', async (request: CallToolRequest) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
       // Only check for initialization for analysis tools
       const analysisTools = ['analyze_class', 'find_class_hierarchy', 'find_references', 'search_code', 'analyze_subsystem', 'query_api'];
       if (analysisTools.includes(request.params.name) && !this.analyzer.isInitialized() && 
@@ -565,5 +576,23 @@ class UnrealAnalyzerServer {
   }
 }
 
-const server = new UnrealAnalyzerServer();
-server.run().catch(console.error);
+export async function startServer(): Promise<void> {
+  const server = new UnrealAnalyzerServer();
+  await server.run();
+}
+
+const isMainModule = (() => {
+  if (!process.argv[1]) {
+    return false;
+  }
+
+  try {
+    return fileURLToPath(import.meta.url) === process.argv[1];
+  } catch {
+    return false;
+  }
+})();
+
+if (isMainModule) {
+  startServer().catch(console.error);
+}

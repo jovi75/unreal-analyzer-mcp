@@ -3,10 +3,11 @@
  */
 
 import Parser, { Query, QueryCapture, SyntaxNode, Language } from 'tree-sitter';
-import * as CPP from 'tree-sitter-cpp';
+import CPP from 'tree-sitter-cpp';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as glob from 'glob';
+import type { IOptions as GlobOptions } from 'glob';
+import { createRequire } from 'node:module';
 
 interface ClassInfo {
   name: string;
@@ -129,6 +130,7 @@ export class UnrealCodeAnalyzer {
   private initialized: boolean = false;
   private readonly MAX_CACHE_SIZE = 1000;
   private cacheQueue: string[] = [];
+  private globSync: (pattern: string, options: GlobOptions & { absolute?: boolean }) => string[];
 
   // Common query patterns
   private readonly QUERY_PATTERNS = {
@@ -142,12 +144,57 @@ export class UnrealCodeAnalyzer {
     this.parser = new Parser();
     this.language = CPP as Language;
     this.parser.setLanguage(this.language);
+    this.globSync = this.createGlobSync();
 
     // Pre-cache common queries
     Object.entries(this.QUERY_PATTERNS).forEach(([key, pattern]) => {
       const query = this.createQuery(pattern);
       this.queryCache.set(key, query);
     });
+  }
+
+  private createGlobSync(): (pattern: string, options: GlobOptions & { absolute?: boolean }) => string[] {
+    const require = createRequire(import.meta.url);
+
+    let globModule: any;
+    try {
+      globModule = require('glob');
+    } catch {
+      globModule = null;
+    }
+
+    const syncCandidates = [
+      globModule?.sync,
+      globModule?.globSync,
+      globModule?.default?.sync,
+      globModule?.default?.globSync,
+      typeof globModule?.GlobSync === 'function'
+        ? (pattern: string, options: GlobOptions & { absolute?: boolean }) =>
+            new globModule.GlobSync(pattern, options).found
+        : undefined,
+    ];
+
+    for (const candidate of syncCandidates) {
+      if (typeof candidate === 'function') {
+        return (pattern: string, options: GlobOptions & { absolute?: boolean }) =>
+          candidate(pattern, options);
+      }
+    }
+
+    try {
+      const legacyGlobSync = require('glob/sync.js') as unknown;
+      if (typeof legacyGlobSync === 'function') {
+        return (pattern: string, options: GlobOptions & { absolute?: boolean }) =>
+          (legacyGlobSync as (pattern: string, options: GlobOptions & { absolute?: boolean }) => string[])(
+            pattern,
+            options
+          );
+      }
+    } catch {
+      // Ignore require failures and fall through to unified error below.
+    }
+
+    throw new Error('glob sync API not available in this environment');
   }
 
   private createQuery(pattern: string): Query {
@@ -231,10 +278,10 @@ export class UnrealCodeAnalyzer {
     // Process files in parallel batches
     const BATCH_SIZE = 10;
     for (const basePath of paths) {
-      const files = glob.sync('**/*.h', { cwd: basePath, absolute: true });
+      const files = this.globSync('**/*.h', { cwd: basePath, absolute: true });
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         const batch = files.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(file => this.parseFile(file)));
+        await Promise.all(batch.map((file: string) => this.parseFile(file)));
       }
     }
   }
@@ -393,7 +440,7 @@ export class UnrealCodeAnalyzer {
       throw new Error('No valid search path configured');
     }
 
-    const files = glob.sync('**/*.h', {
+    const files = this.globSync('**/*.h', {
       cwd: searchPath,
       absolute: true,
     });
@@ -476,7 +523,7 @@ export class UnrealCodeAnalyzer {
       throw new Error('No valid search path configured');
     }
 
-    const files = glob.sync('**/*.{h,cpp}', {
+    const files = this.globSync('**/*.{h,cpp}', {
       cwd: searchPath,
       absolute: true,
     });
@@ -488,7 +535,7 @@ export class UnrealCodeAnalyzer {
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
-        batch.map(async (file) => {
+        batch.map(async (file: string) => {
           const content = fs.readFileSync(file, 'utf8');
           let tree = this.astCache.get(file);
           
@@ -549,7 +596,7 @@ export class UnrealCodeAnalyzer {
     }
 
     const results: CodeReference[] = [];
-    const files = glob.sync(`**/${filePattern}`, {
+    const files = this.globSync(`**/${filePattern}`, {
       cwd: basePath,
       absolute: true,
     });
@@ -561,7 +608,7 @@ export class UnrealCodeAnalyzer {
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
-        batch.map(async (file) => {
+        batch.map(async (file: string) => {
           const refs: CodeReference[] = [];
           const content = fs.readFileSync(file, 'utf8');
           const lines = content.split('\n');
@@ -952,7 +999,7 @@ export class UnrealCodeAnalyzer {
     }
 
     // Get all source files
-    subsystemInfo.sourceFiles = glob.sync('**/*.{h,cpp}', {
+    subsystemInfo.sourceFiles = this.globSync('**/*.{h,cpp}', {
       cwd: fullPath,
       absolute: true,
     });

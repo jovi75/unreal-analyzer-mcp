@@ -2,6 +2,20 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { mockTreeSitter, mockCppBindings, mockGlob, mockFs } from './setup';
 
 const mockedFs = mockFs;
+const mockRequire = jest.fn((moduleId: string) => {
+  if (moduleId === 'glob') {
+    return {
+      ...mockGlob,
+      default: mockGlob,
+    };
+  }
+  if (moduleId === 'glob/sync.js') {
+    return mockGlob.sync;
+  }
+  throw new Error(`Unexpected module requested in test: ${moduleId}`);
+});
+
+const mockCreateRequire = jest.fn(() => mockRequire);
 
 jest.mock('tree-sitter', () => {
   return jest.fn(() => mockTreeSitter);
@@ -17,6 +31,11 @@ type UnrealCodeAnalyzerInstance = import('../analyzer.js').UnrealCodeAnalyzer;
 let UnrealCodeAnalyzer: UnrealCodeAnalyzerCtor;
 
 beforeAll(async () => {
+  await jest.unstable_mockModule('node:module', () => ({
+    __esModule: true,
+    createRequire: mockCreateRequire,
+    default: { createRequire: mockCreateRequire },
+  }));
   await jest.unstable_mockModule('fs', () => ({
     __esModule: true,
     ...mockFs,

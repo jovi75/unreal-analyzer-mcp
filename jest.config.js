@@ -7,8 +7,7 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^tree-sitter-cpp/bindings/node$': '<rootDir>/src/__tests__/__mocks__/tree-sitter-cpp.js',
     '^tree-sitter-cpp$': '<rootDir>/src/__tests__/__mocks__/tree-sitter-cpp.js',
-    '^tree-sitter$': '<rootDir>/src/__tests__/__mocks__/tree-sitter.js',
-    '^@modelcontextprotocol/create-server$': '<rootDir>/src/__tests__/__mocks__/@modelcontextprotocol/create-server.js'
+    '^tree-sitter$': '<rootDir>/src/__tests__/__mocks__/tree-sitter.js'
   },
   transform: {
     '^.+\\.tsx?$': [
@@ -27,6 +26,6 @@ export default {
     'setup.ts',
     '\\.d\\.ts$'
   ],
-  testMatch: ['<rootDir>/src/**/?(*.)+(spec|test).[tj]s'],
+  testMatch: ['<rootDir>/src/__tests__/**/*.test.ts'],
   modulePathIgnorePatterns: ['/build/']
 };
