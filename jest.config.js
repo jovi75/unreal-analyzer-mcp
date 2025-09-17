@@ -20,5 +20,13 @@ export default {
   },
   moduleDirectories: ['node_modules', '<rootDir>/src'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/__mocks__/', 'setup.ts']
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/__mocks__/',
+    '/build/',
+    'setup.ts',
+    '\\.d\\.ts$'
+  ],
+  testMatch: ['<rootDir>/src/**/?(*.)+(spec|test).[tj]s'],
+  modulePathIgnorePatterns: ['/build/']
 };

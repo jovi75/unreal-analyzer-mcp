@@ -404,9 +404,32 @@ export class UnrealCodeAnalyzer {
       if (classInfo) {
         return classInfo;
       }
+
+      const content = fs.readFileSync(file, 'utf8');
+      if (content.includes(`class ${className}`)) {
+        const fallbackInfo = this.createFallbackClassInfo(className, file, content);
+        this.classCache.set(className, fallbackInfo);
+        return fallbackInfo;
+      }
     }
 
     throw new Error(`Class not found: ${className}`);
+  }
+
+  private createFallbackClassInfo(className: string, file: string, content: string): ClassInfo {
+    const lines = content.split('\n');
+    const classLineIndex = lines.findIndex(line => line.includes(`class ${className}`));
+
+    return {
+      name: className,
+      file,
+      line: classLineIndex >= 0 ? classLineIndex + 1 : 1,
+      superclasses: [],
+      interfaces: [],
+      methods: [],
+      properties: [],
+      comments: [],
+    };
   }
 
   public async findClassHierarchy(
@@ -520,13 +543,14 @@ export class UnrealCodeAnalyzer {
       throw new Error('Analyzer not initialized');
     }
 
-    if (!this.unrealPath) {
+    const basePath = this.customPath || this.unrealPath;
+    if (!basePath) {
       throw new Error('No valid search path configured');
     }
 
     const results: CodeReference[] = [];
     const files = glob.sync(`**/${filePattern}`, {
-      cwd: this.unrealPath,
+      cwd: basePath,
       absolute: true,
     });
 

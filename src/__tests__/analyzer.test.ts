@@ -1,20 +1,7 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { UnrealCodeAnalyzer } from '../analyzer.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import { mockTreeSitter, mockCppBindings, mockGlob } from './setup';
+import { mockTreeSitter, mockCppBindings, mockGlob, mockFs } from './setup';
 
-import { PathLike } from 'fs';
-
-// Mock fs module
-jest.mock('fs');
-
-// Get the mocked fs module
-const mockedFs = jest.mocked(fs, { shallow: false });
-
-jest.mock('glob', () => ({
-  sync: mockGlob.sync
-}));
+const mockedFs = mockFs;
 
 jest.mock('tree-sitter', () => {
   return jest.fn(() => mockTreeSitter);
@@ -24,8 +11,27 @@ jest.mock('tree-sitter-cpp', () => mockCppBindings);
 
 jest.mock('tree-sitter-cpp/bindings/node', () => mockCppBindings);
 
+type UnrealCodeAnalyzerCtor = typeof import('../analyzer.js').UnrealCodeAnalyzer;
+type UnrealCodeAnalyzerInstance = import('../analyzer.js').UnrealCodeAnalyzer;
+
+let UnrealCodeAnalyzer: UnrealCodeAnalyzerCtor;
+
+beforeAll(async () => {
+  await jest.unstable_mockModule('fs', () => ({
+    __esModule: true,
+    ...mockFs,
+    default: mockFs,
+  }));
+  await jest.unstable_mockModule('glob', () => ({
+    __esModule: true,
+    ...mockGlob,
+    default: mockGlob,
+  }));
+  ({ UnrealCodeAnalyzer } = await import('../analyzer.js'));
+});
+
 describe('UnrealCodeAnalyzer', () => {
-  let analyzer: UnrealCodeAnalyzer;
+  let analyzer: UnrealCodeAnalyzerInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -33,11 +39,27 @@ describe('UnrealCodeAnalyzer', () => {
     jest.clearAllMocks();
     
     // Setup fs mocks
-    mockedFs.existsSync.mockImplementation((path: PathLike) => {
-      const pathStr = path.toString();
+    mockedFs.existsSync.mockImplementation((input: unknown) => {
+      const pathStr = String(input);
       return !pathStr.includes('invalid');
     });
     mockedFs.readFileSync.mockReturnValue('');
+    mockGlob.sync.mockImplementation((pattern: unknown) => {
+      const patternStr = String(pattern);
+      if (patternStr.includes('**/*.h')) {
+        return ['/mock/path/TestClass.h'];
+      }
+      if (patternStr.includes('**/*.{h,cpp}')) {
+        return ['/mock/path/TestClass.cpp'];
+      }
+      if (patternStr.includes('*.{h,cpp}')) {
+        return ['/mock/unreal/TestFile.cpp'];
+      }
+      if (patternStr.includes('*.cpp')) {
+        return ['/mock/unreal/TestFile.cpp'];
+      }
+      return [];
+    });
     analyzer = new UnrealCodeAnalyzer();
   });
 

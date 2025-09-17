@@ -1,4 +1,5 @@
 import { jest, beforeEach } from '@jest/globals';
+import { mockFs } from './__mocks__/fs.js';
 
 // Global test setup
 beforeEach(() => {
@@ -35,8 +36,4 @@ export const mockGlob = {
   sync: jest.fn().mockReturnValue([])
 };
 
-export const mockFs = {
-  existsSync: jest.fn().mockReturnValue(true),
-  readFileSync: jest.fn().mockReturnValue(''),
-  writeFileSync: jest.fn()
-};
+export { mockFs };

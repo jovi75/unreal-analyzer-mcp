@@ -1,35 +1,26 @@
-import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { UnrealCodeAnalyzer } from '../analyzer.js';
+import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals';
 
-let mockServer: any;
 let toolHandlers: { [key: string]: Function } = {};
-const MockServer = jest.fn(() => mockServer);
+type UnrealCodeAnalyzer = import('../analyzer.js').UnrealCodeAnalyzer;
 
-jest.mock('@modelcontextprotocol/create-server', () => ({
-  Server: MockServer,
-  StdioServerTransport: jest.fn()
-}));
+let MockServer: jest.Mock;
+let MockTransport: jest.Mock;
+let mockServer: {
+  setRequestHandler: jest.Mock;
+  connect: jest.Mock;
+  close: jest.Mock;
+  onerror: jest.Mock;
+};
+let resetMockServer: () => void;
 
-beforeEach(() => {
-  mockServer = {
-    setRequestHandler: jest.fn((type: string, handler: Function) => {
-      toolHandlers[type] = handler;
-    }),
-    connect: jest.fn(),
-    close: jest.fn(),
-    onerror: jest.fn()
-  };
-  MockServer.mockReturnValue(mockServer);
-});
 const MockUnrealCodeAnalyzer = jest.fn();
-jest.mock('../analyzer.js', () => ({
-  UnrealCodeAnalyzer: MockUnrealCodeAnalyzer
-}));
 
 describe('UnrealAnalyzerServer', () => {
   let mockAnalyzer: jest.Mocked<UnrealCodeAnalyzer>;
+  let consoleErrorSpy: any;
 
   beforeAll(() => {
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     // Mock Analyzer implementation
     mockAnalyzer = {
       initialize: jest.fn(),
@@ -46,15 +37,42 @@ describe('UnrealAnalyzerServer', () => {
     MockUnrealCodeAnalyzer.mockImplementation(() => mockAnalyzer);
   });
 
+  afterAll(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
   beforeEach(async () => {
     jest.clearAllMocks();
     toolHandlers = {};
 
-    // Import the server module to trigger initialization
-    await jest.isolateModules(async () => {
-      const mod = await import('../index.js');
-      await new Promise(resolve => setTimeout(resolve, 100)); // Wait for handlers to be registered
+    jest.resetModules();
+    const createServerModule = await import('@modelcontextprotocol/create-server');
+    MockServer = createServerModule.Server as jest.Mock;
+    MockTransport = createServerModule.StdioServerTransport as jest.Mock;
+    mockServer = (createServerModule as any).mockServer;
+    resetMockServer = (createServerModule as any).resetMockServer;
+
+    resetMockServer();
+    mockServer.setRequestHandler.mockImplementation((type: unknown, handler: unknown) => {
+      const key = String(type);
+      if (typeof handler === 'function') {
+        toolHandlers[key] = handler;
+      }
     });
+    mockServer.connect.mockImplementation(() => Promise.resolve());
+    mockServer.close.mockImplementation(() => Promise.resolve());
+    MockServer.mockReturnValue(mockServer);
+    MockTransport.mockReturnValue({});
+
+    MockUnrealCodeAnalyzer.mockImplementation(() => mockAnalyzer);
+
+    await jest.unstable_mockModule('../analyzer.js', () => ({
+      UnrealCodeAnalyzer: MockUnrealCodeAnalyzer,
+    }));
+
+    await import('../index.js');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    process.removeAllListeners('SIGINT');
   });
 
   describe('Server Initialization', () => {
